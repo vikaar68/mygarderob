@@ -186,9 +186,6 @@ def add_item(user):
             category = st.selectbox("Категория", categories)
         with col2:
             name = st.text_input("Название вещи", placeholder="Например: Черное пальто")
-
-        pinterest_link = st.text_input("Ссылка на Pinterest (необязательно)",
-                                       placeholder="https://www.pinterest.com/pin/...")
         photo = st.file_uploader("Фото", type=["jpg", "jpeg", "png"])
         submitted = st.form_submit_button("Сохранить", use_container_width=True)
 
@@ -216,7 +213,6 @@ def add_item(user):
             "category": category,
             "name": name.strip(),
             "photo": photo_path,
-            "pinterest": pinterest_link if pinterest_link.strip() else None,
             "date": str(datetime.now())
         })
         save_json(CLOTHES_FILE, all_clothes)
@@ -255,11 +251,6 @@ def wardrobe_view(user):
             st.markdown(f"**{item['name']}**")
             st.caption(item["category"])
 
-            if item.get("pinterest"):
-                st.markdown(
-                    f'<a href="{item["pinterest"]}" target="_blank" class="pinterest-link">Смотреть на Pinterest</a>',
-                    unsafe_allow_html=True)
-
             if st.button("Удалить", key=f"delete_{item['id']}", use_container_width=True):
                 all_clothes[user] = [x for x in items if x["id"] != item["id"]]
                 save_json(CLOTHES_FILE, all_clothes)
@@ -283,10 +274,14 @@ def ideal_wardrobe(user):
         return
 
     base_categories = [
-        "Пальто", "Куртка", "Тренч", "Пиджак", "Блейзер", "Рубашка",
-        "Топ", "Майка", "Джемпер", "Водолазка", "Свитер", "Худи",
-        "Брюки", "Джинсы", "Юбка", "Сапоги", "Ботинки", "Кеды",
-        "Кроссовки", "Туфли", "Балетки", "Сандалии", "Шарф", "Ремень", "Большая сумка"
+        "Пальто", "Куртка", "Шуба", "Тренч", "Бомбер", "Джинсовая куртка",
+        "Пиджак", "Блейзер", "Костюмный жакет", "Кардиган", "Рубашка",
+        "Топ", "Майка", "Поло", "Джемпер", "Водолазка", "Свитер", "Худи",
+        "Повседневное платье", "Вечернее платье", "Брюки", "Джинсы", "Юбка", "Шорты",
+        "Костюм с юбкой", "Костюм с шортами", "Костюм с брюками",
+        "Сапоги", "Ботинки", "Ботильоны", "Кеды", "Кроссовки", "Туфли", "Босоножки",
+        "Балетки", "Сандали", "Сланцы", "Тапки", "Кроксы", "Головной убор",
+        "Шарф", "Ремень", "Большая сумка", "Маленькая сумка", "Украшения"
     ]
 
     base_items = [i for i in user_items if i["category"] in base_categories]
@@ -316,12 +311,6 @@ def ideal_wardrobe(user):
                 st.markdown('<div class="muted">Фото не добавлено</div>', unsafe_allow_html=True)
             st.markdown(f"**{item['name']}**")
             st.caption(item["category"])
-
-            if item.get("pinterest"):
-                st.markdown(
-                    f'<a href="{item["pinterest"]}" target="_blank" class="pinterest-link">Смотреть на Pinterest</a>',
-                    unsafe_allow_html=True)
-
             st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -345,15 +334,102 @@ def generate_advice(name, category):
         "Пальто": "Брюки, свитер и ботинки.",
         "Куртка": "Джинсы, свитер и кроссовки.",
         "Брюки": "Рубашка, пиджак и туфли.",
-        "Повседневное платье": "Кроссовки или ботинки и легкая куртка."
+        "Повседневное платье": "Кроссовки или боссоножки и легкая куртка."
     }
     return tips.get(category, "Белая футболка, джинсы и кроссовки — универсальный вариант.")
+
+
+def get_pinterest_search_links(name, category):
+    """Генерирует ссылки для поиска на Pinterest"""
+    links = []
+
+    # Базовые поисковые запросы
+    search_queries = []
+
+    # Поиск по категории
+    if category:
+        search_queries.append(f"{category} outfit")
+
+    # Поиск по названию (берем первые 2 слова)
+    if name:
+        name_words = name.split()[:2]
+        if name_words:
+            search_queries.append(f"{' '.join(name_words)} outfit")
+
+    # Стилизованные поиски для популярных категорий
+    style_queries = {
+        "Пальто": "coat outfit ideas winter",
+        "Куртка": "jacket outfit ideas",
+        "Шуба": "fur coat outfit ideas",
+        "Тренч": "trench coat outfit ideas",
+        "Бомбер": "bomber jacket outfit ideas",
+        "Джинсовая куртка": "denim jacket outfit ideas",
+        "Пиджак": "blazer outfit ideas",
+        "Блейзер": "blazer outfit ideas",
+        "Костюмный жакет": "suit jacket outfit ideas",
+        "Кардиган": "cardigan outfit ideas",
+        "Рубашка": "shirt outfit ideas",
+        "Топ": "top outfit ideas",
+        "Майка": "tank top outfit ideas",
+        "Поло": "polo shirt outfit ideas",
+        "Джемпер": "sweater outfit ideas",
+        "Водолазка": "turtleneck outfit ideas",
+        "Свитер": "sweater outfit ideas",
+        "Худи": "hoodie outfit ideas",
+        "Повседневное платье": "casual dress outfit ideas",
+        "Вечернее платье": "evening dress outfit ideas",
+        "Брюки": "pants outfit ideas",
+        "Джинсы": "jeans outfit ideas",
+        "Юбка": "skirt outfit ideas",
+        "Шорты": "shorts outfit ideas",
+        "Костюм с юбкой": "skirt suit outfit ideas",
+        "Костюм с шортами": "shorts suit outfit ideas",
+        "Костюм с брюками": "pantsuit outfit ideas",
+        "Сапоги": "boots outfit ideas",
+        "Ботинки": "boots outfit ideas",
+        "Ботильоны": "ankle boots outfit ideas",
+        "Кеды": "sneakers outfit ideas",
+        "Кроссовки": "sneakers outfit ideas",
+        "Туфли": "heels outfit ideas",
+        "Босоножки": "sandals outfit ideas",
+        "Балетки": "ballet flats outfit ideas",
+        "Сандали": "sandals outfit ideas",
+        "Сланцы": "flip flops outfit ideas",
+        "Тапки": "slippers outfit ideas",
+        "Кроксы": "crocs outfit ideas",
+        "Головной убор": "hat outfit ideas",
+        "Шарф": "scarf outfit ideas",
+        "Ремень": "belt outfit ideas",
+        "Большая сумка": "large bag outfit ideas",
+        "Маленькая сумка": "small bag outfit ideas",
+        "Украшения": "jewelry outfit ideas"
+    }
+
+    if category in style_queries:
+        search_queries.append(style_queries[category])
+
+    # Добавляем поиск по сезону (если есть подсказки в названии)
+    if "зим" in name.lower() or "тепл" in name.lower():
+        search_queries.append("winter outfit ideas")
+    elif "лет" in name.lower() or "легк" in name.lower():
+        search_queries.append("summer outfit ideas")
+
+    # Создаем ссылки для Pinterest
+    base_url = "https://www.pinterest.com/search/pins/?q="
+    for query in search_queries[:5]:  # Ограничиваем до 5 ссылок
+        encoded_query = query.replace(" ", "%20")
+        links.append({
+            "text": query,
+            "url": f"{base_url}{encoded_query}"
+        })
+
+    return links
 
 
 def outfit_match(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.subheader("Подобрать образ")
-    st.caption("Простая подсказка по сочетаниям для выбранной вещи.")
+    st.caption("Выберите вещь, и я покажу, с чем её носить, а также дам ссылки на Pinterest для вдохновения.")
 
     all_clothes = load_json(CLOTHES_FILE)
     items = all_clothes.get(user, [])
@@ -367,16 +443,24 @@ def outfit_match(user):
     chosen = items[options.index(selected)]
 
     if st.button("Показать сочетания", use_container_width=True):
-        st.markdown("#### Рекомендация")
+        st.markdown("#### Рекомендация по сочетанию")
         st.write(generate_advice(chosen["name"], chosen["category"]))
-
-        if chosen.get("pinterest"):
-            st.markdown(
-                f'<a href="{chosen["pinterest"]}" target="_blank" class="pinterest-link">Смотреть идеи на Pinterest</a>',
-                unsafe_allow_html=True)
 
         if chosen.get("photo") and os.path.exists(chosen["photo"]):
             st.image(chosen["photo"], width=240)
+
+        # Генерируем ссылки на Pinterest
+        pinterest_links = get_pinterest_search_links(chosen["name"], chosen["category"])
+
+        if pinterest_links:
+            st.markdown("#### Идеи для вдохновения на Pinterest")
+            st.markdown("Нажмите на ссылку, чтобы посмотреть образы с похожими вещами:")
+
+            for link in pinterest_links:
+                st.markdown(
+                    f'<a href="{link["url"]}" target="_blank" class="pinterest-link">Идеи: {link["text"]}</a>',
+                    unsafe_allow_html=True
+                )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -420,7 +504,6 @@ def main():
         ideal_wardrobe(user)
     with tab4:
         outfit_match(user)
-
 
 if __name__ == "__main__":
     main()
