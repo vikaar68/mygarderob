@@ -3,9 +3,6 @@ import json
 import os
 from datetime import datetime
 import re
-import base64
-from PIL import Image
-import io
 
 DATA_DIR = "data"
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
@@ -582,8 +579,8 @@ def generate_advice(name, category):
     }
 
 
-def get_pinterest_search_links(name, category, photo_path=None):
-    """Генерирует ссылки для поиска на Pinterest по названию и фото"""
+def get_pinterest_search_links(name, category):
+    """Генерирует ссылки для поиска на Pinterest по названию"""
     links = []
 
     # Базовые поисковые запросы
@@ -597,8 +594,8 @@ def get_pinterest_search_links(name, category, photo_path=None):
         search_queries.append(f"{name} {category} outfit")
 
     # Поиск по ключевым словам из названия (убираем цвет, оставляем суть)
-    keywords = []
     color_words = ["черн", "бел", "красн", "син", "зелен", "желт", "розов", "сер", "коричн", "голуб", "фиолет"]
+    keywords = []
     for word in name_words:
         is_color = False
         for color in color_words:
@@ -628,7 +625,6 @@ def get_pinterest_search_links(name, category, photo_path=None):
         "шорты": "shorts outfit"
     }
 
-    # Добавляем поиск по основному типу одежды
     for key, query in style_keywords.items():
         if key in name.lower():
             search_queries.append(query)
@@ -700,8 +696,8 @@ def get_pinterest_search_links(name, category, photo_path=None):
         search_queries.append("spring outfit ideas")
 
     # Поиск по стилю
-    style_keywords = ["спортив", "классик", "романтич", "деловой", "кэжуал", "уличн"]
-    for word in style_keywords:
+    style_words = ["спортив", "классик", "романтич", "деловой", "кэжуал", "уличн"]
+    for word in style_words:
         if word in name_lower:
             search_queries.append(f"{word} style outfit")
             break
@@ -714,23 +710,12 @@ def get_pinterest_search_links(name, category, photo_path=None):
 
     base_url = "https://www.pinterest.com/search/pins/?q="
 
-    # Добавляем поиск по фото если есть
-    if photo_path and os.path.exists(photo_path):
-        # Pinterest visual search URL (если фото есть)
-        # Это просто ссылка на поиск похожих изображений
-        photo_search_url = "https://www.pinterest.com/search/pins/?q=similar"
-        links.append({
-            "text": "Похожие вещи (поиск по фото)",
-            "url": photo_search_url,
-            "is_photo": True
-        })
-
-    for query in unique_queries[:4]:  # Ограничиваем до 4 текстовых запросов
+    # Только текстовые ссылки, без фото и иконок
+    for query in unique_queries[:5]:
         encoded_query = query.replace(" ", "%20").replace("(", "").replace(")", "")
         links.append({
             "text": query,
-            "url": f"{base_url}{encoded_query}",
-            "is_photo": False
+            "url": f"{base_url}{encoded_query}"
         })
 
     return links
@@ -773,27 +758,17 @@ def outfit_match(user):
             st.image(photo_path, width=240)
 
         # Генерируем ссылки на Pinterest
-        pinterest_links = get_pinterest_search_links(
-            chosen["name"],
-            chosen["category"],
-            photo_path
-        )
+        pinterest_links = get_pinterest_search_links(chosen["name"], chosen["category"])
 
         if pinterest_links:
             st.markdown("#### Идеи для вдохновения на Pinterest")
             st.markdown("Нажмите на ссылку, чтобы посмотреть образы:")
 
             for link in pinterest_links:
-                if link.get("is_photo"):
-                    st.markdown(
-                        f'<a href="{link["url"]}" target="_blank" class="pinterest-link">📷 {link["text"]}</a>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        f'<a href="{link["url"]}" target="_blank" class="pinterest-link">🔍 {link["text"]}</a>',
-                        unsafe_allow_html=True
-                    )
+                st.markdown(
+                    f'<a href="{link["url"]}" target="_blank" class="pinterest-link">{link["text"]}</a>',
+                    unsafe_allow_html=True
+                )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -837,7 +812,6 @@ def main():
         ideal_wardrobe(user)
     with tab4:
         outfit_match(user)
-
 
 if __name__ == "__main__":
     main()
