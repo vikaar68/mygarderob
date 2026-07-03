@@ -8,8 +8,10 @@ DATA_DIR = "data"
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 CLOTHES_FILE = os.path.join(DATA_DIR, "clothes.json")
 
+
 def ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
+
 
 def load_json(path):
     if not os.path.exists(path):
@@ -20,6 +22,7 @@ def load_json(path):
     except json.JSONDecodeError:
         return {}
 
+
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -27,6 +30,7 @@ def save_json(path, data):
 
 def clean_name(text):
     return re.sub(r'[<>:"/\\|?*]', "_", text).strip()
+
 
 def init_state():
     defaults = {
@@ -42,6 +46,7 @@ def init_state():
 def notify(message, kind="success"):
     st.session_state.toast = message
     st.session_state.toast_type = kind
+
 
 def apply_style():
     st.markdown(
@@ -116,10 +121,21 @@ def apply_style():
             background: #ffffff;
             border-right: 1px solid #ececec;
         }
+        .pinterest-link {
+            color: #E60023;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        .pinterest-link:hover {
+            text-decoration: underline;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
+
 
 def login():
     st.sidebar.markdown("### Вход")
@@ -147,18 +163,20 @@ def login():
             st.sidebar.warning("Введите имя и фамилию")
     return None
 
+
 def add_item(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.subheader("Добавить вещь")
     st.caption("После сохранения появится сообщение, а форма очистится.")
 
     categories = [
-        "Пальто", "Куртка", "Тренч", "Бомбер", "Джинсовая куртка",
+        "Пальто", "Куртка", "Шуба", "Тренч", "Бомбер", "Джинсовая куртка",
         "Пиджак", "Блейзер", "Костюмный жакет", "Кардиган", "Рубашка",
-        "Топ", "Майка", "Джемпер", "Водолазка", "Свитер", "Худи",
-        "Повседневное платье", "Брюки", "Джинсы", "Юбка", "Шорты",
-        "Сапоги", "Ботинки", "Кеды", "Кроссовки", "Туфли", "Босоножки",
-        "Балетки", "Сандалии", "Сланцы", "Тапки", "Головной убор",
+        "Топ", "Майка", "Поло", "Джемпер", "Водолазка", "Свитер", "Худи",
+        "Повседневное платье", "Вечернее платье", "Брюки", "Джинсы", "Юбка", "Шорты",
+        "Костюм с юбкой", "Костюм с шортами", "Костюм с брюками",
+        "Сапоги", "Ботинки", "Ботильоны", "Кеды", "Кроссовки", "Туфли", "Босоножки",
+        "Балетки", "Сандали", "Сланцы", "Тапки", "Кроксы", "Головной убор",
         "Шарф", "Ремень", "Большая сумка", "Маленькая сумка", "Украшения"
     ]
 
@@ -168,6 +186,9 @@ def add_item(user):
             category = st.selectbox("Категория", categories)
         with col2:
             name = st.text_input("Название вещи", placeholder="Например: Черное пальто")
+
+        pinterest_link = st.text_input("Ссылка на Pinterest (необязательно)",
+                                       placeholder="https://www.pinterest.com/pin/...")
         photo = st.file_uploader("Фото", type=["jpg", "jpeg", "png"])
         submitted = st.form_submit_button("Сохранить", use_container_width=True)
 
@@ -195,6 +216,7 @@ def add_item(user):
             "category": category,
             "name": name.strip(),
             "photo": photo_path,
+            "pinterest": pinterest_link if pinterest_link.strip() else None,
             "date": str(datetime.now())
         })
         save_json(CLOTHES_FILE, all_clothes)
@@ -202,6 +224,7 @@ def add_item(user):
         st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 def wardrobe_view(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -228,8 +251,15 @@ def wardrobe_view(user):
                 st.image(item["photo"], use_container_width=True)
             else:
                 st.markdown('<div class="muted">Фото не добавлено</div>', unsafe_allow_html=True)
+
             st.markdown(f"**{item['name']}**")
             st.caption(item["category"])
+
+            if item.get("pinterest"):
+                st.markdown(
+                    f'<a href="{item["pinterest"]}" target="_blank" class="pinterest-link">Смотреть на Pinterest</a>',
+                    unsafe_allow_html=True)
+
             if st.button("Удалить", key=f"delete_{item['id']}", use_container_width=True):
                 all_clothes[user] = [x for x in items if x["id"] != item["id"]]
                 save_json(CLOTHES_FILE, all_clothes)
@@ -238,6 +268,7 @@ def wardrobe_view(user):
             st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 def ideal_wardrobe(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -265,7 +296,7 @@ def ideal_wardrobe(user):
 
     categories = ["Все"] + sorted(set(base_categories))
     selected_cat = st.selectbox("Категория базового набора", categories, key="base_filter")
-    filtered = base_items if selected_cat != "Все" else base_items
+    filtered = base_items if selected_cat == "Все" else base_items
 
     if selected_cat != "Все":
         filtered = [i for i in base_items if i["category"] == selected_cat]
@@ -285,9 +316,16 @@ def ideal_wardrobe(user):
                 st.markdown('<div class="muted">Фото не добавлено</div>', unsafe_allow_html=True)
             st.markdown(f"**{item['name']}**")
             st.caption(item["category"])
+
+            if item.get("pinterest"):
+                st.markdown(
+                    f'<a href="{item["pinterest"]}" target="_blank" class="pinterest-link">Смотреть на Pinterest</a>',
+                    unsafe_allow_html=True)
+
             st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 def generate_advice(name, category):
     text = name.lower()
@@ -311,6 +349,7 @@ def generate_advice(name, category):
     }
     return tips.get(category, "Белая футболка, джинсы и кроссовки — универсальный вариант.")
 
+
 def outfit_match(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.subheader("Подобрать образ")
@@ -330,10 +369,17 @@ def outfit_match(user):
     if st.button("Показать сочетания", use_container_width=True):
         st.markdown("#### Рекомендация")
         st.write(generate_advice(chosen["name"], chosen["category"]))
+
+        if chosen.get("pinterest"):
+            st.markdown(
+                f'<a href="{chosen["pinterest"]}" target="_blank" class="pinterest-link">Смотреть идеи на Pinterest</a>',
+                unsafe_allow_html=True)
+
         if chosen.get("photo") and os.path.exists(chosen["photo"]):
             st.image(chosen["photo"], width=240)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 def main():
     ensure_data_dir()
@@ -374,6 +420,7 @@ def main():
         ideal_wardrobe(user)
     with tab4:
         outfit_match(user)
+
 
 if __name__ == "__main__":
     main()
