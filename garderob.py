@@ -37,6 +37,8 @@ def init_state():
         "user": None,
         "toast": None,
         "toast_type": "success",
+        "editing_item_id": None,
+        "edit_mode": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -138,6 +140,20 @@ def apply_style():
             margin: 1rem 0;
             border-left: 4px solid #111827;
         }
+        .edit-mode {
+            background: #fff8e7;
+            border: 2px solid #f59e0b;
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+        .suggestion-item {
+            background: #f0f4ff;
+            border-radius: 12px;
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            border-left: 3px solid #4f46e5;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -146,6 +162,10 @@ def apply_style():
 
 def login():
     st.sidebar.markdown("### Вход")
+
+    users_data = load_json(USERS_FILE)
+    saved_users = list(users_data.keys())
+
     if st.session_state.user:
         st.sidebar.success(f"Вы вошли как: {st.session_state.user}")
         if st.sidebar.button("Выйти", use_container_width=True):
@@ -154,6 +174,19 @@ def login():
         return st.session_state.user
 
     with st.sidebar.form("login_form"):
+        if saved_users:
+            st.markdown("**Или выберите из сохраненных:**")
+            selected_user = st.selectbox(
+                "Сохраненные пользователи",
+                options=[""] + saved_users,
+                format_func=lambda x: x if x else "Выберите..."
+            )
+            if selected_user:
+                st.session_state.user = selected_user
+                st.rerun()
+
+        st.markdown("---")
+        st.markdown("**Или войдите как новый пользователь:**")
         name = st.text_input("Имя", placeholder="Например, Анна")
         surname = st.text_input("Фамилия", placeholder="Например, Иванова")
         submitted = st.form_submit_button("Войти", use_container_width=True)
@@ -163,7 +196,10 @@ def login():
             user = f"{name.strip()} {surname.strip()}"
             st.session_state.user = user
             users = load_json(USERS_FILE)
-            users.setdefault(user, {"created": str(datetime.now())})
+            if user not in users:
+                users[user] = {"created": str(datetime.now()), "last_login": str(datetime.now())}
+            else:
+                users[user]["last_login"] = str(datetime.now())
             save_json(USERS_FILE, users)
             st.rerun()
         else:
@@ -177,7 +213,7 @@ def add_item(user):
     st.caption("После сохранения появится сообщение, а форма очистится.")
 
     categories = [
-        "Пальто", "Куртка", "Шуба", "Тренч", "Бомбер", "Джинсовая куртка",
+        "Пальто", "Куртка", "Шуба", "Тренч", "Ветровка", "Плащ", "Бомбер", "Джинсовая куртка",
         "Пиджак", "Блейзер", "Костюмный жакет", "Кардиган", "Рубашка",
         "Топ", "Майка", "Поло", "Джемпер", "Кофта", "Водолазка", "Свитер", "Худи",
         "Повседневное платье", "Вечернее платье", "Корсет", "Брюки", "Джинсы", "Юбка", "Шорты",
@@ -229,6 +265,100 @@ def add_item(user):
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+def edit_item(user, item_id):
+    all_clothes = load_json(CLOTHES_FILE)
+    items = all_clothes.get(user, [])
+
+    item_to_edit = None
+    item_index = -1
+    for i, item in enumerate(items):
+        if item["id"] == item_id:
+            item_to_edit = item
+            item_index = i
+            break
+
+    if item_to_edit is None:
+        st.error("Вещь не найдена")
+        return
+
+    st.markdown('<div class="edit-mode">', unsafe_allow_html=True)
+    st.subheader(f"Редактировать: {item_to_edit['name']}")
+
+    categories = [
+        "Пальто", "Куртка", "Шуба", "Тренч", "Ветровка", "Плащ", "Бомбер", "Джинсовая куртка",
+        "Пиджак", "Блейзер", "Костюмный жакет", "Кардиган", "Рубашка",
+        "Топ", "Майка", "Поло", "Джемпер", "Кофта", "Водолазка", "Свитер", "Худи",
+        "Повседневное платье", "Вечернее платье", "Корсет", "Брюки", "Джинсы", "Юбка", "Шорты",
+        "Костюм с юбкой", "Костюм с шортами", "Костюм с брюками",
+        "Сапоги", "Ботинки", "Ботильоны", "Кеды", "Кроссовки", "Туфли", "Босоножки",
+        "Балетки", "Сандали", "Сланцы", "Тапки", "Кроксы", "Головной убор",
+        "Шарф", "Ремень", "Большая сумка", "Маленькая сумка", "Украшения"
+    ]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        new_category = st.selectbox(
+            "Категория",
+            categories,
+            index=categories.index(item_to_edit["category"]) if item_to_edit["category"] in categories else 0,
+            key=f"edit_cat_{item_id}"
+        )
+    with col2:
+        new_name = st.text_input("Название", value=item_to_edit["name"], key=f"edit_name_{item_id}")
+
+    new_photo = st.file_uploader("Заменить фото (необязательно)", type=["jpg", "jpeg", "png"],
+                                 key=f"edit_photo_{item_id}")
+
+    if item_to_edit.get("photo") and os.path.exists(item_to_edit["photo"]):
+        st.image(item_to_edit["photo"], width=150, caption="Текущее фото")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Сохранить изменения", use_container_width=True, key=f"save_edit_{item_id}"):
+            if not new_name.strip():
+                st.warning("Введите название вещи")
+            else:
+                new_photo_path = item_to_edit["photo"]
+                if new_photo:
+                    user_folder = os.path.join(DATA_DIR, clean_name(user))
+                    os.makedirs(user_folder, exist_ok=True)
+                    safe_name = clean_name(new_name)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    ext = new_photo.name.split(".")[-1].lower()
+                    filename = f"{clean_name(new_category)}_{safe_name}_{timestamp}.{ext}"
+                    new_photo_path = os.path.join(user_folder, filename)
+                    with open(new_photo_path, "wb") as f:
+                        f.write(new_photo.getvalue())
+                    if item_to_edit.get("photo") and os.path.exists(item_to_edit["photo"]) and item_to_edit[
+                        "photo"] != new_photo_path:
+                        try:
+                            os.remove(item_to_edit["photo"])
+                        except:
+                            pass
+
+                items[item_index] = {
+                    "id": item_to_edit["id"],
+                    "category": new_category,
+                    "name": new_name.strip(),
+                    "photo": new_photo_path,
+                    "date": item_to_edit["date"]
+                }
+                all_clothes[user] = items
+                save_json(CLOTHES_FILE, all_clothes)
+                notify(f"Вещь «{new_name.strip()}» обновлена.", "success")
+                st.session_state.edit_mode = False
+                st.session_state.editing_item_id = None
+                st.rerun()
+
+    with col2:
+        if st.button("Отмена", use_container_width=True, key=f"cancel_edit_{item_id}"):
+            st.session_state.edit_mode = False
+            st.session_state.editing_item_id = None
+            st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 def wardrobe_view(user):
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.subheader("Гардероб")
@@ -246,6 +376,11 @@ def wardrobe_view(user):
     filtered = items if selected_cat == "Все" else [i for i in items if i["category"] == selected_cat]
 
     st.write(f"Найдено вещей: **{len(filtered)}**")
+
+    if st.session_state.edit_mode and st.session_state.editing_item_id:
+        edit_item(user, st.session_state.editing_item_id)
+        return
+
     cols = st.columns(3)
     for i, item in enumerate(filtered):
         with cols[i % 3]:
@@ -258,11 +393,23 @@ def wardrobe_view(user):
             st.markdown(f"**{item['name']}**")
             st.caption(item["category"])
 
-            if st.button("Удалить", key=f"delete_{item['id']}", use_container_width=True):
-                all_clothes[user] = [x for x in items if x["id"] != item["id"]]
-                save_json(CLOTHES_FILE, all_clothes)
-                notify("Вещь удалена.", "success")
-                st.rerun()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Редактировать", key=f"edit_{item['id']}", use_container_width=True):
+                    st.session_state.editing_item_id = item["id"]
+                    st.session_state.edit_mode = True
+                    st.rerun()
+            with col2:
+                if st.button("Удалить", key=f"delete_{item['id']}", use_container_width=True):
+                    all_clothes[user] = [x for x in items if x["id"] != item["id"]]
+                    save_json(CLOTHES_FILE, all_clothes)
+                    if item.get("photo") and os.path.exists(item["photo"]):
+                        try:
+                            os.remove(item["photo"])
+                        except:
+                            pass
+                    notify("Вещь удалена.", "success")
+                    st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -281,7 +428,7 @@ def ideal_wardrobe(user):
         return
 
     base_categories = [
-        "Пальто", "Куртка", "Шуба", "Тренч", "Бомбер", "Джинсовая куртка",
+        "Пальто", "Куртка", "Шуба", "Тренч", "Ветровка", "Плащ", "Бомбер", "Джинсовая куртка",
         "Пиджак", "Блейзер", "Костюмный жакет", "Кардиган", "Рубашка",
         "Топ", "Майка", "Поло", "Джемпер", "Кофта", "Водолазка", "Свитер", "Худи",
         "Повседневное платье", "Вечернее платье", "Корсет", "Брюки", "Джинсы", "Юбка", "Шорты",
@@ -327,9 +474,7 @@ def generate_advice(name, category):
     """Генерирует подробные советы по сочетанию вещи"""
     text = name.lower()
 
-    # Словарь с советами и стилем для каждой категории
     advice_dict = {
-        # Верхняя одежда
         "Пальто": {
             "совет": "Отлично смотрится с джемпером, водолазкой, брюками и ботинками. Можно надеть с платьем и сапогами.",
             "стиль": "классический, элегантный"
@@ -346,6 +491,14 @@ def generate_advice(name, category):
             "совет": "Носите с платьем, брюками, юбкой. Хорошо смотрится с туфлями на каблуке или балетками.",
             "стиль": "классический, деловой"
         },
+        "Ветровка": {
+            "совет": "Отлично подходит для прогулок: с джинсами, худи, кроссовками или кедами.",
+            "стиль": "спортивный, повседневный"
+        },
+        "Плащ": {
+            "совет": "Элегантный дождевик: с брюками, рубашкой, туфлями или с платьем и сапогами.",
+            "стиль": "классический, деловой"
+        },
         "Бомбер": {
             "совет": "Сочетается с джинсами, шортами, кроссовками и футболкой.",
             "стиль": "спортивный, молодёжный"
@@ -354,8 +507,6 @@ def generate_advice(name, category):
             "совет": "Подходит к платьям, юбкам, брюкам. Отлично смотрится с кедами и кроссовками.",
             "стиль": "кэжуал, универсальный"
         },
-
-        # Жакеты и пиджаки
         "Пиджак": {
             "совет": "Сочетается с брюками, рубашкой, туфлями. Расслабленный вариант - с джинсами и футболкой.",
             "стиль": "деловой, смарт-кэжуал"
@@ -368,8 +519,6 @@ def generate_advice(name, category):
             "совет": "Красиво смотрится с брюками, рубашкой и туфлями. Для кэжуал - с джинсами и лоферами.",
             "стиль": "классический, деловой"
         },
-
-        # Трикотаж
         "Кардиган": {
             "совет": "Сочетается с джинсами, платьем, юбкой. Носите с водолазкой, топом, рубашкой.",
             "стиль": "уютный, кэжуал"
@@ -394,8 +543,6 @@ def generate_advice(name, category):
             "совет": "С джинсами, шортами, широкими брюками. Лучшие друзья - кроссовки и кеды.",
             "стиль": "спортивный, уличный"
         },
-
-        # Рубашки и топы
         "Рубашка": {
             "совет": "Идеальна с брюками, джинсами, юбкой. Подходит под пиджак, с кардиганом.",
             "стиль": "базовый, универсальный"
@@ -416,8 +563,6 @@ def generate_advice(name, category):
             "совет": "Стильно смотрится с юбкой, джинсами, сапогами-ботфортами и клатчем.",
             "стиль": "элегантный"
         },
-
-        # Платья
         "Повседневное платье": {
             "совет": "Универсально с кроссовками, ботинками, балетками. Можно дополнить кардиганом.",
             "стиль": "кэжуал, женственный"
@@ -426,8 +571,6 @@ def generate_advice(name, category):
             "совет": "Стильно смотрится с туфлями на каблуке, клатчем, украшениями. Дополните палантином.",
             "стиль": "вечерний, парадный"
         },
-
-        # Низ
         "Брюки": {
             "совет": "Лучше сочетается с рубашкой, топом, пиджаком. Туфли, балетки, ботинки - все подходит.",
             "стиль": "базовый, универсальный"
@@ -444,8 +587,6 @@ def generate_advice(name, category):
             "совет": "Лучше всего сочетается с топом, майкой, футболкой, рубашкой. Кроссовки, сандалии, кеды.",
             "стиль": "летний, спортивный"
         },
-
-        # Костюмы
         "Костюм с юбкой": {
             "совет": "Деловой стиль с блузкой, топом, рубашкой. Туфли на каблуке или балетки.",
             "стиль": "деловой, элегантный"
@@ -458,8 +599,6 @@ def generate_advice(name, category):
             "совет": "Идеально сочетается с рубашкой, блузкой, топом. Туфли, лоферы или балетки.",
             "стиль": "классический, деловой"
         },
-
-        # Обувь
         "Сапоги": {
             "совет": "С джинсами, брюками, платьем, юбкой. Подходят к свитеру, пальто, пуховику.",
             "стиль": "осенне-зимний"
@@ -508,8 +647,6 @@ def generate_advice(name, category):
             "совет": "Удобно: с шортами, джинсами, легкими брюками. Для активного отдыха.",
             "стиль": "удобный, активный"
         },
-
-        # Аксессуары
         "Головной убор": {
             "совет": "Завершает образ: к пальто, куртке, платью. Подберите по сезону.",
             "стиль": "завершающий, стильный"
@@ -536,11 +673,9 @@ def generate_advice(name, category):
         }
     }
 
-    # Если категория есть в словаре
     if category in advice_dict:
         return advice_dict[category]
 
-    # Если категории нет - ищем по ключевым словам в названии
     if "джинс" in text:
         if "клеш" in text:
             return {
@@ -572,28 +707,90 @@ def generate_advice(name, category):
             "стиль": "домашний, пляжный"
         }
 
-    # Универсальный совет
     return {
         "совет": "Белая футболка, джинсы и кроссовки — универсальный вариант.",
         "стиль": "универсальный"
     }
 
 
+def get_compatible_items(user_items, chosen_item):
+    """Находит вещи из гардероба, которые подходят к выбранной вещи"""
+    compatible = []
+
+    # Правила совместимости
+    compatibility_rules = {
+        # Верхняя одежда с чем сочетается
+        "Пальто": ["платье", "брюки", "джемпер", "водолазка", "свитер", "сапоги", "ботинки"],
+        "Куртка": ["джинсы", "худи", "свитер", "кроссовки", "брюки", "ботинки"],
+        "Шуба": ["платье", "джинсы", "свитер", "сапоги", "клатч"],
+        "Тренч": ["платье", "брюки", "юбка", "туфли", "балетки"],
+        "Джинсовая куртка": ["платье", "юбка", "брюки", "кеды", "кроссовки"],
+        "Пиджак": ["брюки", "рубашка", "туфли", "джинсы", "футболка"],
+        "Блейзер": ["джинсы", "брюки", "юбка-карандаш", "топ", "балетки"],
+        "Кардиган": ["джинсы", "платье", "юбка", "водолазка", "топ", "рубашка"],
+        "Рубашка": ["брюки", "джинсы", "юбка", "пиджак", "кардиган"],
+        "Топ": ["юбка", "брюки", "джинсы", "пиджак", "кардиган"],
+        "Джемпер": ["джинсы", "брюки", "юбка", "кроссовки", "ботинки"],
+        "Свитер": ["джинсы", "брюки", "юбка", "кроссовки", "ботинки", "сапоги"],
+        "Худи": ["джинсы", "шорты", "брюки", "кроссовки", "кеды"],
+        "Повседневное платье": ["кроссовки", "ботинки", "балетки", "кардиган"],
+        "Брюки": ["рубашка", "топ", "пиджак", "туфли", "балетки", "ботинки"],
+        "Джинсы": ["футболка", "свитер", "рубашка", "худи", "кеды", "кроссовки", "сапоги"],
+        "Юбка": ["топ", "рубашка", "свитер", "балетки", "туфли", "ботинки"],
+        "Сапоги": ["джинсы", "брюки", "платье", "юбка", "свитер", "пальто"],
+        "Ботинки": ["джинсы", "брюки", "платье", "рубашка", "свитер", "пальто"],
+        "Кеды": ["джинсы", "шорты", "платье", "худи", "свитер", "футболка"],
+        "Кроссовки": ["джинсы", "брюки", "шорты", "платье", "худи", "футболка"],
+        "Туфли": ["платье", "юбка", "брюки", "рубашка", "топ", "пиджак"],
+        "Шорты": ["топ", "майка", "футболка", "рубашка", "кроссовки", "сандалии", "кеды"],
+        "Шарф": ["пальто", "куртка", "свитер"],
+        "Ремень": ["джинсы", "брюки", "платье"],
+        "Большая сумка": ["пальто", "куртка", "платье"],
+    }
+
+    chosen_category = chosen_item["category"]
+    chosen_name = chosen_item["name"].lower()
+
+    # Получаем список категорий, с которыми сочетается выбранная вещь
+    compatible_categories = []
+    if chosen_category in compatibility_rules:
+        compatible_categories = compatibility_rules[chosen_category]
+
+    # Ищем вещи из гардероба, которые подходят
+    for item in user_items:
+        if item["id"] == chosen_item["id"]:
+            continue  # Пропускаем саму вещь
+
+        # Проверяем по категории
+        if item["category"] in compatible_categories:
+            compatible.append(item)
+            continue
+
+        # Проверяем по ключевым словам в названии
+        item_name = item["name"].lower()
+        if chosen_category == "Пальто" and any(word in item_name for word in ["платье", "брюки", "сапоги"]):
+            compatible.append(item)
+        elif chosen_category == "Куртка" and any(word in item_name for word in ["джинсы", "кроссовки"]):
+            compatible.append(item)
+        elif chosen_category == "Джинсы" and any(
+                word in item_name for word in ["футболка", "свитер", "рубашка", "худи"]):
+            compatible.append(item)
+        elif chosen_category == "Юбка" and any(word in item_name for word in ["топ", "рубашка", "свитер"]):
+            compatible.append(item)
+
+    return compatible[:8]  # Возвращаем не больше 8 вещей
+
+
 def get_pinterest_search_links(name, category):
     """Генерирует ссылки для поиска на Pinterest по названию"""
     links = []
-
-    # Базовые поисковые запросы
     search_queries = []
 
-    # Разбираем название на ключевые слова
     name_words = name.lower().split()
 
-    # Основной поиск по полному названию + категория
     if category:
         search_queries.append(f"{name} {category} outfit")
 
-    # Поиск по ключевым словам из названия (убираем цвет, оставляем суть)
     color_words = ["черн", "бел", "красн", "син", "зелен", "желт", "розов", "сер", "коричн", "голуб", "фиолет"]
     keywords = []
     for word in name_words:
@@ -608,7 +805,6 @@ def get_pinterest_search_links(name, category):
     if keywords:
         search_queries.append(f"{' '.join(keywords[:3])} outfit")
 
-    # Поиск по категории + основные характеристики
     style_keywords = {
         "юбка": "skirt outfit",
         "платье": "dress outfit",
@@ -630,7 +826,6 @@ def get_pinterest_search_links(name, category):
             search_queries.append(query)
             break
 
-    # Стилизованные поиски для всех категорий
     style_queries = {
         "Пальто": "coat outfit ideas winter",
         "Куртка": "jacket outfit ideas",
@@ -684,7 +879,6 @@ def get_pinterest_search_links(name, category):
     if category in style_queries:
         search_queries.append(style_queries[category])
 
-    # Поиск по сезону
     name_lower = name.lower()
     if "зим" in name_lower or "тепл" in name_lower or "шуб" in name_lower:
         search_queries.append("winter outfit ideas")
@@ -695,14 +889,12 @@ def get_pinterest_search_links(name, category):
     elif "весн" in name_lower:
         search_queries.append("spring outfit ideas")
 
-    # Поиск по стилю
     style_words = ["спортив", "классик", "романтич", "деловой", "кэжуал", "уличн"]
     for word in style_words:
         if word in name_lower:
             search_queries.append(f"{word} style outfit")
             break
 
-    # Создаем ссылки для Pinterest (только уникальные)
     unique_queries = []
     for query in search_queries:
         if query not in unique_queries:
@@ -710,7 +902,6 @@ def get_pinterest_search_links(name, category):
 
     base_url = "https://www.pinterest.com/search/pins/?q="
 
-    # Только текстовые ссылки, без фото и иконок
     for query in unique_queries[:5]:
         encoded_query = query.replace(" ", "%20").replace("(", "").replace(")", "")
         links.append({
@@ -746,16 +937,38 @@ def outfit_match(user):
         st.markdown("#### Рекомендация по сочетанию")
         st.write(advice["совет"])
 
-        # Показываем стиль
         if "стиль" in advice:
             st.markdown(f"**Стиль:** {advice['стиль']}")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Показываем фото
+        # Показываем фото выбранной вещи
         photo_path = chosen.get("photo")
         if photo_path and os.path.exists(photo_path):
             st.image(photo_path, width=240)
+            st.caption(f"Вы выбрали: {chosen['name']}")
+
+        # НАХОДИМ ВЕЩИ ИЗ ГАРДЕРОБА
+        compatible_items = get_compatible_items(items, chosen)
+
+        if compatible_items:
+            st.markdown("#### Вещи из вашего гардероба, которые подойдут")
+            st.markdown("Вот что можно надеть с этой вещью:")
+
+            # Показываем подходящие вещи в виде сетки
+            cols = st.columns(3)
+            for idx, item in enumerate(compatible_items):
+                with cols[idx % 3]:
+                    st.markdown('<div class="suggestion-item">', unsafe_allow_html=True)
+                    if item.get("photo") and os.path.exists(item["photo"]):
+                        st.image(item["photo"], use_container_width=True)
+                    else:
+                        st.markdown('<div class="muted">Без фото</div>', unsafe_allow_html=True)
+                    st.markdown(f"**{item['name']}**")
+                    st.caption(item["category"])
+                    st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("В вашем гардеробе пока нет вещей, которые подходят к этой. Добавьте больше вещей!")
 
         # Генерируем ссылки на Pinterest
         pinterest_links = get_pinterest_search_links(chosen["name"], chosen["category"])
@@ -812,6 +1025,7 @@ def main():
         ideal_wardrobe(user)
     with tab4:
         outfit_match(user)
+
 
 if __name__ == "__main__":
     main()
