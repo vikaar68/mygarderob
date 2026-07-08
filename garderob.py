@@ -717,7 +717,6 @@ def get_compatible_items(user_items, chosen_item):
     """Находит вещи из гардероба, которые подходят к выбранной вещи"""
     compatible = []
 
-    # Правила совместимости
     compatibility_rules = {
         # Верхняя одежда
         "Пальто": ["платье", "брюки", "джемпер", "водолазка", "свитер", "сапоги", "ботинки", "шарф", "сумка", "джинсы"],
@@ -730,9 +729,10 @@ def get_compatible_items(user_items, chosen_item):
         "Джинсовая куртка": ["платье", "юбка", "брюки", "кеды", "кроссовки", "футболка", "топ", "шорты"],
 
         # Жакеты и пиджаки
-        "Пиджак": ["брюки", "рубашка", "туфли", "джинсы", "футболка", "юбка", "балетки", "водолазка"],
-        "Блейзер": ["джинсы", "брюки", "юбка-карандаш", "топ", "балетки", "туфли", "рубашка"],
-        "Костюмный жакет": ["брюки", "рубашка", "туфли", "джинсы", "водолазка", "юбка-карандаш"],
+        "Пиджак": ["брюки", "рубашка", "туфли", "джинсы", "футболка", "юбка", "балетки", "водолазка", "юбка-карандаш",
+                   "юбка-миди", "юбка-макси"],
+        "Блейзер": ["джинсы", "брюки", "юбка-карандаш", "топ", "балетки", "туфли", "рубашка", "юбка", "юбка-миди"],
+        "Костюмный жакет": ["брюки", "рубашка", "туфли", "джинсы", "водолазка", "юбка-карандаш", "юбка"],
 
         # Трикотаж
         "Кардиган": ["джинсы", "платье", "юбка", "водолазка", "топ", "рубашка", "брюки", "балетки"],
@@ -757,7 +757,8 @@ def get_compatible_items(user_items, chosen_item):
         # Низ
         "Брюки": ["рубашка", "топ", "пиджак", "туфли", "балетки", "ботинки", "свитер", "водолазка"],
         "Джинсы": ["футболка", "свитер", "рубашка", "худи", "кеды", "кроссовки", "сапоги", "кофта", "топ", "пиджак"],
-        "Юбка": ["топ", "рубашка", "свитер", "балетки", "туфли", "ботинки", "пиджак", "водолазка", "джинсовая куртка"],
+        "Юбка": ["топ", "рубашка", "свитер", "балетки", "туфли", "ботинки", "пиджак", "водолазка", "джинсовая куртка",
+                 "блейзер"],
         "Шорты": ["топ", "майка", "футболка", "рубашка", "кроссовки", "сандалии", "кеды", "худи"],
 
         # Костюмы
@@ -789,36 +790,57 @@ def get_compatible_items(user_items, chosen_item):
     }
 
     chosen_category = chosen_item["category"]
-    chosen_name = chosen_item["name"].lower()
 
     # Получаем список категорий, с которыми сочетается выбранная вещь
     compatible_categories = []
     if chosen_category in compatibility_rules:
         compatible_categories = compatibility_rules[chosen_category]
+    else:
+        # Если категории нет в правилах, ищем по ключевым словам в названии
+        for key in compatibility_rules:
+            if key.lower() in chosen_category.lower():
+                compatible_categories = compatibility_rules[key]
+                break
+
+    # Добавляем проверку по всем словам из названия категории
+    # Например, "Юбка баллон" содержит "юбка", поэтому будет найдена
+    if not compatible_categories:
+        # Ищем по частям названия категории
+        category_parts = chosen_category.lower().split()
+        for part in category_parts:
+            for key in compatibility_rules:
+                if part in key.lower():
+                    compatible_categories.extend(compatibility_rules[key])
+                    break
+            if compatible_categories:
+                break
 
     # Ищем вещи из гардероба, которые подходят
     for item in user_items:
         if item["id"] == chosen_item["id"]:
-            continue  # Пропускаем саму вещь
+            continue
 
-        # Проверяем по категории
+        # Проверяем по полному совпадению категории
         if item["category"] in compatible_categories:
             compatible.append(item)
             continue
 
-        # Проверяем по ключевым словам в названии
-        item_name = item["name"].lower()
-        if chosen_category == "Пальто" and any(word in item_name for word in ["платье", "брюки", "сапоги"]):
-            compatible.append(item)
-        elif chosen_category == "Куртка" and any(word in item_name for word in ["джинсы", "кроссовки"]):
-            compatible.append(item)
-        elif chosen_category == "Джинсы" and any(
-                word in item_name for word in ["футболка", "свитер", "рубашка", "худи"]):
-            compatible.append(item)
-        elif chosen_category == "Юбка" and any(word in item_name for word in ["топ", "рубашка", "свитер"]):
-            compatible.append(item)
+        # Проверяем по частичному совпадению категории
+        item_category_lower = item["category"].lower()
+        for compatible_cat in compatible_categories:
+            if compatible_cat.lower() in item_category_lower:
+                compatible.append(item)
+                break
 
-    return compatible[:8]  # Возвращаем не больше 8 вещей
+    # Удаляем дубликаты
+    seen_ids = set()
+    unique_compatible = []
+    for item in compatible:
+        if item["id"] not in seen_ids:
+            seen_ids.add(item["id"])
+            unique_compatible.append(item)
+
+    return unique_compatible[:10]
 
 
 def get_pinterest_search_links(name, category):
